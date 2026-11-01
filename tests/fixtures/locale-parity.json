@@ -1,0 +1,4 @@
+{
+  "fr": "quand @greenFlag est cliqué\ndemander [Quel est le nombre de départ ?] et attendre\nmettre [réponse v] à (réponse)\nrépéter (2) fois\n  mettre [réponse v] à ((réponse) * (3))\n  mettre [réponse v] à ((réponse) + (4))\n  dire (réponse) pendant (2) secondes\nfin",
+  "ar": "عند نقر @greenFlag\nاسأل [ما هو عدد البداية؟] وانتظر\nاجعل [الإجابة v] مساوية لـ (الإجابة)\nكرِّر (2) مرة\n  اجعل [الإجابة v] مساوية لـ ((الإجابة) * (3))\n  اجعل [الإجابة v] مساوية لـ ((الإجابة) + (4))\n  قل (الإجابة) لمدة (2) ثانية\nنهاية"
+}

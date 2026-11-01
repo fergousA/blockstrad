@@ -1,0 +1,132 @@
+   Compiling blockstrad-wasm v0.1.0 (/home/user/blockstrad/engine)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.65s
+     Running unittests src/lib.rs (engine/target/debug/deps/blockstrad_wasm-a548795960bd69c8)
+
+running 20 tests
+test parser::tests::test_at_category_no_longer_forces_category ... ok
+test parser::tests::test_category_default_motion_suffix ... ok
+test parser::tests::test_category_suffix_matches_list_block_when_text_fits ... ok
+test parser::tests::test_category_suffix_matches_variable_block_when_text_fits ... ok
+test parser::tests::test_category_suffix_with_free_text_and_label_suffix ... ok
+test parser::tests::test_category_suffix_with_free_text_forces_category ... ok
+test parser::tests::test_duplicate_line_label_fails ... ok
+test parser::tests::test_french_ajouter_defaults_to_variable ... ok
+test parser::tests::test_french_ajouter_forced_list_with_category_suffix ... ok
+test parser::tests::test_french_control_stop_has_dropdown_input ... ok
+test parser::tests::test_french_turn_right_alias_keeps_turn_icon ... ok
+test parser::tests::test_if_else_parsing ... ok
+test parser::tests::test_line_label_suffix_and_line_numbers ... ok
+test parser::tests::test_sonst_shape ... ok
+test parser::tests::test_looks_effect_color_prefers_looks_category ... ok
+test parser::tests::test_sound_effect_pitch_prefers_sound_category ... ok
+test render::tests::test_render_c_block_with_else ... ok
+test render::tests::test_render_document_line_numbers_start_from_second_block ... ok
+test render::tests::test_render_document_with_line_numbers ... ok
+test parser::translation::tests::every_catalog_template_has_the_complete_numbered_slot_set ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/test_if_else.rs (engine/target/debug/deps/test_if_else-a65603b0b12d9024)
+
+running 23 tests
+test test_all_blocks_list_and_backdrop_lines_parse_to_known_blocks ... ok
+test test_all_blocks_list_render_contains_all_labels ... ok
+test test_call_block ... ok
+test test_call_block_localized_keyword ... ok
+test test_category_suffix_french_list_block ... ok
+test test_category_suffix_french_variable_change_dropdown_shape ... ok
+test test_category_suffix_french_variable_block ... ok
+test test_control_else_shape ... ok
+test test_custom_arg_reporter ... ok
+test test_debug_square_dropdown_parse ... ok
+test test_french_when_flag_block_variants ... ok
+test test_german_block_parsing ... ok
+test test_french_block_parsing ... ok
+test test_if_else_parsing ... ok
+test test_infix_greater_than_inside_predicate ... ok
+test test_less_than_operator_inside_predicate ... ok
+test test_nested_boolean_and_parsing ... ok
+test test_nested_boolean_or_parsing ... ok
+test test_round_dropdowns ... ok
+test test_procedure_definition ... ok
+test test_square_dropdowns ... ok
+test test_square_bracket_sound_dropdown ... ok
+test test_touching_color_uses_color_input ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/test_locale_theme_parity.rs (engine/target/debug/deps/test_locale_theme_parity-c161aa5ccff83f64)
+
+running 12 tests
+test custom_parameter_ink_follows_its_theme ... ok
+test arabic_assignment_aliases_preserve_inputs_and_opcode ... ok
+test grayscale_french_arabic_paints_match ... ok
+test forcing_rtl_only_changes_geometry_not_paints ... ok
+test grayscale_has_no_coloured_text_icons_or_swatches ... ok
+test grayscale_short_and_long_hex_swatches_are_equivalent ... ok
+test high_contrast_french_arabic_paints_match ... ok
+test normal_theme_keeps_its_original_coloured_accents ... ok
+test normal_french_arabic_paints_match ... ok
+test unknown_arabic_text_is_not_guessed_to_be_an_assignment ... ok
+test print_french_arabic_paints_match ... ok
+test worksheet_has_identical_french_arabic_semantics ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/test_rtl_ar.rs (engine/target/debug/deps/test_rtl_ar-8ca0b0985216cbe9)
+
+running 19 tests
+test arabic_flag_hat_is_recognised ... ok
+test arabic_lays_out_right_to_left ... ok
+test arabic_matches_with_and_without_harakat ... ok
+test arabic_repeat_is_recognised ... ok
+test arabic_say_for_secs_is_recognised ... ok
+test c_block_header_is_not_drawn_twice ... ok
+test english_still_lays_out_left_to_right ... ok
+test hebrew_and_persian_are_rtl ... ok
+test ltr_loop_arrow_is_not_mirrored ... ok
+test ltr_pen_badge_stays_on_the_left ... ok
+test ltr_stack_is_flush_on_the_left ... ok
+test rtl_c_block_header_hugs_the_reading_edge ... ok
+test rtl_c_block_outline_reaches_the_reading_edge ... ok
+test grayscale_gives_each_category_a_distinct_shade ... ok
+test rtl_define_hat_is_mirrored ... ok
+test rtl_loop_arrow_points_back_into_the_loop ... ok
+test rtl_pen_badge_sits_on_the_reading_edge ... ok
+test rtl_stack_is_flush_on_the_reading_edge ... ok
+test rtl_mirrors_the_block_outline ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running tests/translation.rs (engine/target/debug/deps/translation-91f488c90c658602)
+
+running 20 tests
+test all_four_themes_and_rtl_directions_render_without_reclassification ... ok
+test attached_units_do_not_eat_a_numbered_argument ... ok
+test explicit_keep_mode_returns_diagnostics_instead_of_guessing ... ok
+test literal_colors_are_not_translated_as_prose ... ok
+test menu_overrides_are_scoped_to_a_block_and_slot ... ok
+test missing_target_templates_are_not_silently_english ... ok
+test nested_control_else_and_line_labels_survive ... ok
+test numbered_slots_are_reordered_not_zipped_by_position ... ok
+test official_menu_values_are_contextual_and_user_names_are_not_menus ... ok
+test official_sound_effects_disambiguate_source_locales_too ... ok
+test optional_dictionary_translates_data_not_builtins_or_numbers ... ok
+test procedures_and_formal_parameter_names_are_not_builtin_templates ... ok
+test strict_menu_rendering_does_not_hide_incomplete_translation ... ok
+test the_users_french_program_renders_as_canonical_arabic ... ok
+test translated_strings_are_what_the_font_measurement_sees ... ok
+test unknown_commands_are_errors_but_plain_variable_reporters_are_valid ... ok
+test unknown_languages_and_misspelled_dictionary_domains_fail_clearly ... ok
+test unsupported_menus_are_reported_and_preserved ... ok
+test user_text_cannot_inject_scratch_syntax_into_the_ast ... ok
+test all_676_language_pairs_preserve_program_semantics ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.27s
+
+   Doc-tests blockstrad_wasm
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

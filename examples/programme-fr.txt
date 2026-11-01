@@ -1,0 +1,8 @@
+quand @greenFlag est cliqué
+demander [Quel est le nombre de départ ?] et attendre
+mettre [réponse v] à (réponse)
+répéter (2) fois
+  mettre [réponse v] à ((réponse) * (3))
+  mettre [réponse v] à ((réponse) + (4))
+fin
+dire (réponse) pendant (2) secondes

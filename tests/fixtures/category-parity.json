@@ -1,0 +1,68 @@
+[
+  {
+    "id": "MOTION_MOVESTEPS",
+    "category": "motion",
+    "fr": "avancer de (10) pas",
+    "ar": "تحرك (10) خطوة"
+  },
+  {
+    "id": "LOOKS_SAY",
+    "category": "looks",
+    "fr": "dire [Salut]",
+    "ar": "قل [مرحبا]"
+  },
+  {
+    "id": "SOUND_PLAY",
+    "category": "sound",
+    "fr": "jouer le son (Miaou v)",
+    "ar": "شغِّل الصوت (مياو v)"
+  },
+  {
+    "id": "EVENT_WHENFLAGCLICKED",
+    "category": "events",
+    "fr": "quand @greenFlag est cliqué",
+    "ar": "عند نقر @greenFlag"
+  },
+  {
+    "id": "CONTROL_REPEAT",
+    "category": "control",
+    "fr": "répéter (2) fois\nfin",
+    "ar": "كرر (2) مرة\nنهاية"
+  },
+  {
+    "id": "SENSING_ANSWER",
+    "category": "sensing",
+    "fr": "(réponse)",
+    "ar": "(الإجابة)"
+  },
+  {
+    "id": "OPERATORS_ADD",
+    "category": "operators",
+    "fr": "((1) + (2))",
+    "ar": "((1) + (2))"
+  },
+  {
+    "id": "DATA_SETVARIABLETO",
+    "category": "variables",
+    "fr": "mettre [n v] à (7)",
+    "ar": "اجعل [ن v] مساوية لـ (7)"
+  },
+  {
+    "id": "DATA_DELETEALLOFLIST",
+    "category": "lists",
+    "fr": "supprimer tous les éléments de la liste [nombres v]",
+    "ar": "احذف كل العناصر في [أعداد v]"
+  },
+  {
+    "id": "pen.penDown",
+    "category": "pen",
+    "fr": "stylo en position d'écriture",
+    "ar": "أنزل القلم"
+  },
+  {
+    "id": "procedures_definition",
+    "category": "custom",
+    "fr": "définir carré [côté]",
+    "ar": "تعريف مربع [ضلع]"
+  }
+]

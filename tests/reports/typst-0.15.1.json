@@ -1,0 +1,497 @@
+{
+  "typst": "typst 0.15.1 (9dfd3a08)",
+  "wasm_sha256": "70699d068acd7653296bafadbf1271c7b7ebbbb65cb5d1e8602bcc2a2ba353ff",
+  "language_pairs": 676,
+  "svg_renders": 104,
+  "status": "PASS",
+  "catalog": {
+    "block_definitions": 226,
+    "engine": "blockst 52b87da + local colour fixes + blockstrad AST translation",
+    "languages": [
+      {
+        "code": "ar",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": true,
+        "templates": 214
+      },
+      {
+        "code": "ca",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "cs",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "cy",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "de",
+        "missing": [
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 215
+      },
+      {
+        "code": "el",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "en",
+        "missing": [
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 224
+      },
+      {
+        "code": "es",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "fa",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": true,
+        "templates": 214
+      },
+      {
+        "code": "fr",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 215
+      },
+      {
+        "code": "gd",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "he",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": true,
+        "templates": 214
+      },
+      {
+        "code": "hi",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "hr",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "hu",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "id",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "it",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "ja",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "nb",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "nl",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "pl",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "pt",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "ro",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "ru",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "sl",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      },
+      {
+        "code": "tr",
+        "missing": [
+          "SENSING_ONLINE",
+          "facesensing.faceIsDetected",
+          "facesensing.faceSize",
+          "facesensing.faceTilt",
+          "facesensing.goToPart",
+          "facesensing.pointInFaceTiltDirection",
+          "facesensing.setSizeToFaceSize",
+          "facesensing.whenFaceDetected",
+          "facesensing.whenSpriteTouchesPart",
+          "facesensing.whenTilted",
+          "scratchblocks:addInput",
+          "scratchblocks:ellipsis"
+        ],
+        "rtl": false,
+        "templates": 214
+      }
+    ],
+    "menu_groups": 53
+  },
+  "scope": "676 pairs on a nested, multi-category fixture; 104 SVG paint comparisons; not every possible program or menu value"
+}

@@ -1,0 +1,1140 @@
+use crate::measure::{block_size, c_block_inner_width, c_block_size, current_inset_scale, input_box_height, is_rtl, max_nested_height, script_size_with_inside, segment_width, text_width};
+use crate::model::{BlockSpec, DocumentSpec, ScriptSpec, SegmentSpec};
+use crate::svg::{boolean_path, cap_path, escape_text, hat_path, mouth_cap_path, mouth_path, proc_hat_path, reporter_path, stack_path};
+use crate::theme::colors_for;
+
+const LABEL_MARGIN: f32 = 4.447_998;
+
+#[derive(Clone, Copy)]
+struct LineMarker {
+    line: u32,
+    y: f32,
+}
+
+fn s(value: f32) -> f32 {
+    value * current_inset_scale()
+}
+
+fn inset(base: f32, min: f32) -> f32 {
+    (base * current_inset_scale()).max(min)
+}
+
+/// How to paint a label so the colour actually takes effect.
+///
+/// Labels carry `fill="..."`, which is a *presentation attribute* — and the
+/// `.sb-label` rule in the stylesheet overrides it, because CSS always beats
+/// presentation attributes. Every theme so far got away with this: normal
+/// paints all labels white, print all black, so one blanket rule was right.
+///
+/// Greyscale is the first theme where the label colour depends on the
+/// category, since text has to flip to black once the fill gets light. An
+/// inline `style="fill:..."` is a declaration, not an attribute, so it wins
+/// over the class and lets each block state its own colour.
+fn label_fill(theme: &str, fill: &str) -> String {
+    if theme == "grayscale" {
+        format!("style=\"fill:{fill}\"")
+    } else {
+        format!("fill=\"{fill}\"")
+    }
+}
+
+pub fn render_document(document: &DocumentSpec) -> String {
+    crate::measure::set_rtl(document.rtl);
+    let scale = document.scale.unwrap_or(1.0).max(0.1);
+    let theme = document.theme.as_deref().unwrap_or("normal");
+    let font = &document.font;
+    let show_line_numbers = document.line_numbers;
+    let line_number_start = document.line_number_start;
+    let line_number_first_block = document.line_number_first_block.max(1);
+    let line_number_offset = line_number_start.saturating_sub(1);
+    let line_number_base = line_number_first_block.saturating_sub(1);
+    let line_number_gutter = document.line_number_gutter.max(12.0);
+
+    let mut script_svgs = String::new();
+    let mut line_svgs = String::new();
+    let mut total_width = 0.0f32;
+    let mut total_height = 0.0f32;
+    let content_x = if show_line_numbers { line_number_gutter } else { 0.0 };
+
+    for (index, script) in document.scripts.iter().enumerate() {
+        if index > 0 {
+            total_height += 36.0;
+        }
+        let (svg, width, height) = render_script(script, theme, false);
+        script_svgs.push_str(&format!("<g transform=\"translate({} {})\">{}</g>", content_x, total_height + 1.0, svg));
+
+        if show_line_numbers {
+            let mut markers = Vec::new();
+            collect_script_line_markers(&script.blocks, 1.0, &mut markers);
+            for marker in markers {
+                if marker.line < line_number_first_block {
+                    continue;
+                }
+                let shown = marker
+                    .line
+                    .saturating_sub(line_number_base)
+                    .saturating_add(line_number_offset);
+                line_svgs.push_str(&format!(
+                    "<text class=\"sb-line-number\" x=\"{}\" y=\"{}\" text-anchor=\"end\">{}</text>",
+                    line_number_gutter - 6.0,
+                    total_height + 1.0 + marker.y,
+                    shown
+                ));
+            }
+        }
+
+        total_height += height + 1.0;
+        total_width = total_width.max(content_x + width + 4.0);
+    }
+
+    if document.scripts.is_empty() {
+        total_width = 1.0;
+        total_height = 1.0;
+    }
+
+    let width = total_width * scale;
+    let height = total_height * scale;
+
+    let content = format!("{}{}", line_svgs, script_svgs);
+    format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\"><defs>{}</defs><g transform=\"scale({scale})\">{}</g></svg>",
+        defs(theme, font),
+        content,
+    )
+}
+
+/// Build a CSS font stack from the configured family.
+///
+/// The family is quoted so that names containing spaces survive CSS parsing,
+/// and Scratch-like fallbacks are appended. Without them an SVG renderer that
+/// cannot resolve the family falls back to its own default font — inside a
+/// Typst `raw` block that default is monospace, which breaks the layout
+/// because the widths were measured with the configured family.
+fn css_font_stack(font: &str) -> String {
+    let font = font.trim();
+    if font.is_empty() {
+        return "\"Helvetica Neue\", Helvetica, Arial, sans-serif".to_string();
+    }
+    if font.contains(',') || font.starts_with('"') || font.starts_with('\'') {
+        return font.to_string();
+    }
+
+    let mut stack = format!("\"{}\"", font.replace('"', ""));
+    for fallback in ["Helvetica Neue", "Helvetica", "Arial"] {
+        if !font.eq_ignore_ascii_case(fallback) {
+            stack.push_str(&format!(", \"{fallback}\""));
+        }
+    }
+    stack.push_str(", sans-serif");
+    stack
+}
+
+fn defs(theme: &str, font: &str) -> String {
+    let font = &css_font_stack(font);
+    let text_fill = if theme == "high-contrast" || theme == "print" { "#000" } else { "#fff" };
+
+    // The green flag stays a flag in greyscale: a dark outline round a light
+    // body keeps it readable as a shape once the green is gone.
+    let (flag_outer, flag_inner) = match theme {
+        "print" => ("#000000", "#ffffff"),
+        "grayscale" => ("#3c3c3c", "#c8c8c8"),
+        _ => ("#45993d", "#4cbf56"),
+    };
+    let (arrow_outer, arrow_inner) = match theme {
+        "print" => ("#000000", "#000000"),
+        "high-contrast" => ("#000000", "#000000"),
+        "grayscale" => ("#4a4a4a", "#ffffff"),
+        _ => ("#3d79cc", "#ffffff"),
+    };
+    let (loop_outer, loop_inner) = match theme {
+        "print" => ("#000000", "#000000"),
+        "high-contrast" => ("#000000", "#000000"),
+        "grayscale" => ("#5a5a5a", "#ffffff"),
+        _ => ("#cf8b17", "#ffffff"),
+    };
+
+    // UI inks must follow the theme as well as the category palette. The
+    // Scratch blue-grey used for inputs, numbers and dropdown icons is not
+    // achromatic, even when every block background is already grey.
+    let input_text_fill = if matches!(theme, "print" | "high-contrast" | "grayscale") {
+        "#000"
+    } else {
+        "#575e75"
+    };
+    let line_number_fill = match theme {
+        "grayscale" => "#666666",
+        "print" => "#000000",
+        _ => "#6b7280",
+    };
+    let (icon_ink, icon_shadow, pen_accent) = if theme == "grayscale" {
+        ("#3c3c3c", "#202020", "#898989")
+    } else {
+        ("#575E75", "#231f20", "#4C97FF")
+    };
+
+    format!(
+        "<style>.sb-label{{font:500 12pt {font};fill:{text_fill};word-spacing:1pt}}.sb-input-text{{font:500 12pt {font};fill:{input_text_fill}}}.sb-line-number{{font:500 12pt {font};fill:{line_number_fill}}}</style>\
+        <g id=\"sb-greenFlag\">\
+          <path d=\"M20.8 3.7c-.4-.2-.9-.1-1.2.2-2 1.6-4.8 1.6-6.8 0-2.3-1.9-5.6-2.3-8.3-1v-.4c0-.6-.5-1-1-1s-1 .4-1 1v18.8c0 .5.5 1 1 1h.1c.5 0 1-.5 1-1v-6.4c1-.7 2.1-1.2 3.4-1.3 1.2 0 2.4.4 3.4 1.2 2.9 2.3 7 2.3 9.8 0 .3-.2.4-.5.4-.9V4.7c0-.5-.3-.9-.8-1zm-.3 10.2C18 16 14.4 16 11.9 14c-1.1-.9-2.5-1.4-4-1.4-1.2.1-2.3.5-3.4 1.1V4c2.5-1.4 5.5-1.1 7.7.6 2.4 1.9 5.7 1.9 8.1 0h.2l.1.1-.1 9.2z\" fill=\"{flag_outer}\"/>\
+          <path d=\"M20.6 4.8l-.1 9.1v.1c-2.5 2-6.1 2-8.6 0-1.1-.9-2.5-1.4-4-1.4-1.2.1-2.3.5-3.4 1.1V4c2.5-1.4 5.5-1.1 7.7.6 2.4 1.9 5.7 1.9 8.1 0h.2c0 .1.1.1.1.2z\" fill=\"{flag_inner}\"/>\
+        </g>\
+        <g id=\"sb-turnLeft\">\
+          <path d=\"M20.56 18.21a10.22 10.22 0 0 1-8.1 4.22 2.26 2.26 0 0 1-.15-4.52 5.57 5.57 0 0 0 4.24-2.53 5.05 5.05 0 0 0 .55-4.62A4.25 4.25 0 0 0 15.77 9a4.29 4.29 0 0 0-2-.8 4.82 4.82 0 0 0-3.15.8l1.12 1.41A1.59 1.59 0 0 1 10.58 13H2.89a1.56 1.56 0 0 1-1.26-.63A1.54 1.54 0 0 1 1.35 11l1.72-7.43A1.59 1.59 0 0 1 4.6 2.4a1.57 1.57 0 0 1 1.24.6l1.08 1.35a10.68 10.68 0 0 1 7.72-1.68A9.88 9.88 0 0 1 19.22 4.81 9.65 9.65 0 0 1 22.05 9a10.08 10.08 0 0 1-1.49 9.21z\" fill=\"{arrow_outer}\"/>\
+          <path d=\"M19.78 17.65a9.29 9.29 0 0 1-7.35 3.83 1.31 1.31 0 0 1-.08-2.62 6.52 6.52 0 0 0 5-2.92 6.04 6.04 0 0 0 .67-5.51 5.28 5.28 0 0 0-1.64-2.16 5.18 5.18 0 0 0-2.48-1 5.86 5.86 0 0 0-4.67 1.57L10.96 11a.59.59 0 0 1-.43 1H2.92a.6.6 0 0 1-.6-.75l1.71-7.42a.59.59 0 0 1 1-.21l1.67 2.1a9.71 9.71 0 0 1 7.75-2.07 8.84 8.84 0 0 1 4.12 1.92 8.67 8.67 0 0 1 2.54 3.72 9.14 9.14 0 0 1-1.33 8.36z\" fill=\"{arrow_inner}\"/>\
+        </g>\
+        <g id=\"sb-turnRight\">\
+          <path d=\"M21.38 11.83h-7.61a.59.59 0 0 1-.43-1l1.75-2.19a5.9 5.9 0 0 0-4.7-1.58 5.07 5.07 0 0 0-4.11 3.17A6 6 0 0 0 7 15.77a6.51 6.51 0 0 0 5 2.92 1.31 1.31 0 0 1-.08 2.62 9.3 9.3 0 0 1-7.35-3.82 9.16 9.16 0 0 1-1.4-8.37A8.51 8.51 0 0 1 5.71 5.4a8.76 8.76 0 0 1 4.11-1.92 9.71 9.71 0 0 1 7.75 2.07l1.67-2.1a.59.59 0 0 1 1 .21L22 11.08a.59.59 0 0 1-.62.75z\" fill=\"{arrow_outer}\"/>\
+          <path d=\"M20.56 11.83h-7.61a.59.59 0 0 1-.43-1l1.75-2.19A5.9 5.9 0 0 0 9.57 7.06a5.07 5.07 0 0 0-4.11 3.17 6 6 0 0 0 .72 5.54 6.51 6.51 0 0 0 5 2.92 1.31 1.31 0 0 1-.08 2.62 9.3 9.3 0 0 1-7.35-3.82 9.16 9.16 0 0 1-1.4-8.37A8.51 8.51 0 0 1 4.89 5.4 8.76 8.76 0 0 1 9 3.48a9.71 9.71 0 0 1 7.75 2.07l1.67-2.1a.59.59 0 0 1 1 .21l1.81 7.42a.59.59 0 0 1-.67.75z\" fill=\"{arrow_inner}\"/>\
+        </g>\
+        <g id=\"sb-loopArrow\">\
+          <path d=\"M23.3 11c-.3.6-.9 1-1.5 1h-1.6c-.1 1.3-.5 2.5-1.1 3.6-.9 1.7-2.3 3.2-4.1 4.1-1.7.9-3.6 1.2-5.5.9-1.8-.3-3.5-1.1-4.9-2.3-.7-.7-.7-1.9 0-2.6.6-.6 1.6-.7 2.3-.2H7c.9.6 1.9.9 2.9.9s1.9-.3 2.7-.9c1.1-.8 1.8-2.1 1.8-3.5h-1.5c-.9 0-1.7-.7-1.7-1.7 0-.4.2-.9.5-1.2l4.4-4.4c.7-.6 1.7-.6 2.4 0L23 9.2c.5.5.6 1.2.3 1.8z\" fill=\"{loop_outer}\"/>\
+          <path d=\"M21.8 11h-2.6c0 1.5-.3 2.9-1 4.2-.8 1.6-2.1 2.8-3.7 3.6-1.5.8-3.3 1.1-4.9.8-1.6-.2-3.2-1-4.4-2.1-.4-.3-.4-.9-.1-1.2.3-.4.9-.4 1.2-.1 1 .7 2.2 1.1 3.4 1.1s2.3-.3 3.3-1c.9-.6 1.6-1.5 2-2.6.3-.9.4-1.8.2-2.8h-2.4c-.4 0-.7-.3-.7-.7 0-.2.1-.3.2-.4l4.4-4.4c.3-.3.7-.3.9 0L22 9.8c.3.3.4.6.3.9s-.3.3-.5.3z\" fill=\"{loop_inner}\"/>\
+        </g>\
+        <g id=\"sb-penIcon\" stroke=\"{icon_ink}\" fill=\"none\" stroke-linejoin=\"round\"><path d=\"M8.753 34.602l-4.251 1.779 1.784-4.236c1.218-2.892 2.907-5.423 5.03-7.538L31.066 4.93c.846-.842 2.65-.41 4.032.967 1.38 1.375 1.816 3.173.97 4.015L16.318 29.59c-2.123 2.116-4.664 3.799-7.565 5.012\" fill=\"#FFF\"/><path d=\"M29.41 6.111s-4.45-2.379-8.202 5.771c-1.734 3.766-4.35 1.546-4.35 1.546\"/><path d=\"M36.42 8.825c0 .463-.14.873-.432 1.164l-9.335 9.301c.282-.29.41-.668.41-1.12 0-.874-.507-1.963-1.406-2.868-1.362-1.358-3.147-1.8-4.002-.99L30.99 5.01c.844-.84 2.65-.41 4.035.96.898.904 1.396 1.982 1.396 2.855M10.515 33.774a23.74 23.74 0 0 1-1.764.83L4.5 36.382l1.786-4.235c.258-.604.529-1.186.833-1.757.69.183 1.449.625 2.109 1.282.659.658 1.102 1.412 1.287 2.102\" fill=\"{pen_accent}\"/><path d=\"M36.498 8.748c0 .464-.141.874-.433 1.165l-19.742 19.68c-2.131 2.111-4.673 3.793-7.572 5.01L4.5 36.381l.974-2.317 1.925-.808c2.899-1.218 5.441-2.899 7.572-5.01l19.742-19.68c.292-.292.432-.702.432-1.165 0-.647-.27-1.4-.779-2.123.249.172.498.377.736.614.898.905 1.396 1.983 1.396 2.856\" fill=\"{icon_ink}\" opacity=\".15\"/><path d=\"M18.45 12.831a.904.904 0 1 1-1.807 0 .904.904 0 0 1 1.807 0z\" fill=\"{icon_ink}\"/></g>\
+        <g id=\"sb-dropdownArrow\" transform=\"scale(0.944)\"><path d=\"M12.71 2.44A2.41 2.41 0 0 1 12 4.16L8.08 8.08a2.45 2.45 0 0 1-3.45 0L.72 4.16A2.42 2.42 0 0 1 0 2.44 2.48 2.48 0 0 1 .71.71C1 .47 1.43 0 6.36 0s5.39.46 5.64.71a2.44 2.44 0 0 1 .71 1.73z\" fill=\"{icon_shadow}\" opacity=\".1\"/><path d=\"M6.36 7.79a1.43 1.43 0 0 1-1-.42L1.42 3.45a1.44 1.44 0 0 1 0-2c.56-.56 9.31-.56 9.87 0a1.44 1.44 0 0 1 0 2L7.37 7.37a1.43 1.43 0 0 1-1.01.42z\" fill=\"#fff\"/></g>\
+        <g id=\"sb-dropdownArrow-dark\" transform=\"scale(0.944)\"><path d=\"M12.71 2.44A2.41 2.41 0 0 1 12 4.16L8.08 8.08a2.45 2.45 0 0 1-3.45 0L.72 4.16A2.42 2.42 0 0 1 0 2.44 2.48 2.48 0 0 1 .71.71C1 .47 1.43 0 6.36 0s5.39.46 5.64.71a2.44 2.44 0 0 1 .71 1.73z\" fill=\"{icon_shadow}\" opacity=\".1\"/><path d=\"M6.36 7.79a1.43 1.43 0 0 1-1-.42L1.42 3.45a1.44 1.44 0 0 1 0-2c.56-.56 9.31-.56 9.87 0a1.44 1.44 0 0 1 0 2L7.37 7.37a1.43 1.43 0 0 1-1.01.42z\" fill=\"{icon_ink}\"/></g>\
+        <g id=\"sb-dropdownArrow-print\" transform=\"scale(0.944)\"><path d=\"M12.71 2.44A2.41 2.41 0 0 1 12 4.16L8.08 8.08a2.45 2.45 0 0 1-3.45 0L.72 4.16A2.42 2.42 0 0 1 0 2.44 2.48 2.48 0 0 1 .71.71C1 .47 1.43 0 6.36 0s5.39.46 5.64.71a2.44 2.44 0 0 1 .71 1.73z\" fill=\"#000\" opacity=\".1\"/><path d=\"M6.36 7.79a1.43 1.43 0 0 1-1-.42L1.42 3.45a1.44 1.44 0 0 1 0-2c.56-.56 9.31-.56 9.87 0a1.44 1.44 0 0 1 0 2L7.37 7.37a1.43 1.43 0 0 1-1.01.42z\" fill=\"#000\"/></g>\
+        <g id=\"sb-penIcon-print\" stroke=\"#000\" fill=\"none\" stroke-linejoin=\"round\"><path d=\"M8.753 34.602l-4.251 1.779 1.784-4.236c1.218-2.892 2.907-5.423 5.03-7.538L31.066 4.93c.846-.842 2.65-.41 4.032.967 1.38 1.375 1.816 3.173.97 4.015L16.318 29.59c-2.123 2.116-4.664 3.799-7.565 5.012\" fill=\"#FFF\"/><path d=\"M29.41 6.111s-4.45-2.379-8.202 5.771c-1.734 3.766-4.35 1.546-4.35 1.546\"/><path d=\"M36.42 8.825c0 .463-.14.873-.432 1.164l-9.335 9.301c.282-.29.41-.668.41-1.12 0-.874-.507-1.963-1.406-2.868-1.362-1.358-3.147-1.8-4.002-.99L30.99 5.01c.844-.84 2.65-.41 4.035.96.898.904 1.396 1.982 1.396 2.855M10.515 33.774a23.74 23.74 0 0 1-1.764.83L4.5 36.382l1.786-4.235c.258-.604.529-1.186.833-1.757.69.183 1.449.625 2.109 1.282.659.658 1.102 1.412 1.287 2.102\" fill=\"#000\"/><path d=\"M36.498 8.748c0 .464-.141.874-.433 1.165l-19.742 19.68c-2.131 2.111-4.673 3.793-7.572 5.01L4.5 36.381l.974-2.317 1.925-.808c2.899-1.218 5.441-2.899 7.572-5.01l19.742-19.68c.292-.292.432-.702.432-1.165 0-.647-.27-1.4-.779-2.123.249.172.498.377.736.614.898.905 1.396 1.983 1.396 2.856\" fill=\"#000\" opacity=\".15\"/><path d=\"M18.45 12.831a.904.904 0 1 1-1.807 0 .904.904 0 0 1 1.807 0z\" fill=\"#000\"/></g>\""
+    )
+}
+
+fn render_script(script: &ScriptSpec, theme: &str, inside: bool) -> (String, f32, f32) {
+    let (width, height) = script_size_with_inside(&script.blocks, inside);
+    let mut y = 1.0;
+    let mut svg = String::new();
+    let rtl = is_rtl();
+    for block in &script.blocks {
+        let (block_svg, block_w, block_h) = render_block(block, theme);
+        let margin = if inside { 0.0 } else { 2.0 };
+        // Blocks in a stack share an edge, and it is the edge the reader
+        // starts from: the left in English, the RIGHT in Arabic or Hebrew.
+        // Stacking them all at x = 0 lines up their left sides, so a short
+        // block and a long one look ragged on the reading side — which is
+        // exactly the misalignment this fixes.
+        let x = if rtl {
+            (width - margin - block_w).max(0.0)
+        } else {
+            margin
+        };
+        svg.push_str(&format!("<g transform=\"translate({} {})\">{}</g>", x, y, block_svg));
+        y += block_h;
+    }
+    (svg, width, height)
+}
+
+fn render_block(block: &BlockSpec, theme: &str) -> (String, f32, f32) {
+    let colors = colors_for(&block.category, theme);
+    // Pen blocks get a pen icon prepended
+    if block.category == "pen" && !block.segments.is_empty() {
+        return render_pen_block(block, theme);
+    }
+    match block.shape.as_str() {
+        "reporter" => render_reporter_like(block, theme, colors.fill, colors.stroke, false),
+        "boolean" => render_reporter_like(block, theme, colors.fill, colors.stroke, true),
+        "c-block" => render_c_block(block, theme, false),
+        "c-block cap" => render_c_block(block, theme, true),
+        "define-hat" => render_define_hat(block, theme),
+        "hat" => render_simple_block(block, theme, &hat_path),
+        "cap" => render_simple_block(block, theme, &cap_path),
+        _ => render_simple_block(block, theme, &stack_path),
+    }
+}
+fn render_pen_block(block: &BlockSpec, theme: &str) -> (String, f32, f32) {
+    let colors = colors_for(&block.category, theme);
+    let (total_width, height) = block_size(block);
+    // The pen symbol path is ~36px tall in defs. Scale it so it stays within
+    // the inner block body and does not overlap the top notch at small heights.
+    let pen_icon_base_h = 36.4;
+    let icon_size = (height - inset(16.0, 12.0)).clamp(10.0, 18.0);
+    let icon_scale = icon_size / pen_icon_base_h;
+    // Extra space: icon (scaled) + separator gap
+    let pen_extra = inset(32.0, 20.0);
+    let mut svg = String::new();
+    // Same asymmetric outline as any stack block, so it mirrors the same way.
+    if is_rtl() {
+        svg.push_str(&format!("<g transform=\"translate({} 0) scale(-1 1)\"><path d=\"{}\" fill=\"{}\" stroke=\"{}\"/></g>", total_width, stack_path(total_width, height), colors.fill, colors.stroke));
+    } else {
+        svg.push_str(&format!("<path d=\"{}\" fill=\"{}\" stroke=\"{}\"/>", stack_path(total_width, height), colors.fill, colors.stroke));
+    }
+    // Draw pen icon scaled and centered vertically
+    let icon_y = ((height - icon_size) / 2.0).max(inset(4.0, 3.0)).floor();
+    // The pen glyph has a blue barrel; the print variant is pure black line
+    // art, which is what greyscale wants too.
+    let pen_icon = if theme == "print" || theme == "grayscale" { "#sb-penIcon-print" } else { "#sb-penIcon" };
+    // The pen badge marks the start of the block, so it belongs on the
+    // reading edge — and it is a drawing, so it is flipped as well as moved,
+    // exactly like the loop arrow.
+    let icon_w = 36.4 * icon_scale;
+    if is_rtl() {
+        svg.push_str(&format!("<g transform=\"translate({} {}) scale({} {})\"><use href=\"{pen_icon}\"/></g>", total_width - 4.0 - icon_w + icon_w, icon_y, -icon_scale, icon_scale));
+    } else {
+        svg.push_str(&format!("<g transform=\"translate(4 {}) scale({})\"><use href=\"{pen_icon}\"/></g>", icon_y, icon_scale));
+    }
+    svg.push_str(&render_segments(block, &block.segments, theme, colors.text, pen_extra, height, 0.0));
+    (svg, total_width, height)
+}
+
+fn render_define_hat(block: &BlockSpec, theme: &str) -> (String, f32, f32) {
+    let colors = colors_for(&block.category, theme);
+    let (width, height) = block_size(block);
+    let mut svg = String::new();
+    // The define hat's dome rises over one corner, so the outline mirrors
+    // like every other asymmetric path.
+    if is_rtl() {
+        svg.push_str(&format!("<g transform=\"translate({} 0) scale(-1 1)\"><path d=\"{}\" fill=\"{}\" stroke=\"{}\"/></g>", width, proc_hat_path(width, height), colors.fill, colors.stroke));
+    } else {
+        svg.push_str(&format!("<path d=\"{}\" fill=\"{}\" stroke=\"{}\"/>", proc_hat_path(width, height), colors.fill, colors.stroke));
+    }
+    
+    // Inner outline: 48px tall (line_height=40 + corner_radii=8)
+    let content_h = 48.0;
+    
+    // Compute inner outline width from remaining segments (without leading define keyword)
+    let mut remaining: Vec<SegmentSpec> = block.segments.clone();
+    let define_label = if let Some(SegmentSpec::Text { value }) = remaining.first() {
+        let label = value.clone();
+        remaining.remove(0);
+        label
+    } else {
+        "define".to_string()
+    };
+    let define_text_width = text_width(&define_label);
+    
+    let inner_content_w = if remaining.is_empty() {
+        0.0
+    } else {
+        // Measure remaining segments via block_size on a temp stack block
+        let temp = BlockSpec {
+            shape: "stack".to_string(),
+            category: "custom-arg".to_string(),
+            line_number: None,
+            segments: remaining.clone(),
+            body: vec![],
+            else_body: vec![],
+            else_segments: vec![],
+        };
+        let (tw, _) = block_size(&temp);
+        tw
+    };
+    let inner_w = inner_content_w.max(100.0);
+    
+    // Define keyword text on the reading side, vertically centered
+    let define_y = 20.0 + (48.0 - 12.0) / 2.0;
+    // Position of inner outline: after pad(8) + "define" + margin
+    let define_gap = 8.0;
+    // In RTL the keyword sits on the right and the procedure prototype to
+    // its left, so both spans are mirrored inside the hat's width.
+    let (keyword_x, inner_x) = if is_rtl() {
+        (
+            mirror_span(width, 10.0, define_text_width),
+            mirror_span(width, 8.0 + define_text_width + define_gap, inner_w),
+        )
+    } else {
+        (10.0, 8.0 + define_text_width + define_gap)
+    };
+
+    svg.push_str(&format!("<text class=\"sb-label\" x=\"0\" y=\"13\" {} transform=\"translate({} {})\">{}</text>",
+        label_fill(theme, colors.text), keyword_x, define_y, define_label));
+
+    // Inner outline starts after "define" label + gap
+    svg.push_str(&format!("<g transform=\"translate({} 20)\">", inner_x));
+    if is_rtl() {
+        svg.push_str(&format!("<g transform=\"translate({} 0) scale(-1 1)\"><path d=\"{}\" fill=\"{}\" stroke=\"{}\"/></g>", inner_w, stack_path(inner_w, content_h), colors.alt, colors.stroke));
+    } else {
+        svg.push_str(&format!("<path d=\"{}\" fill=\"{}\" stroke=\"{}\"/>", stack_path(inner_w, content_h), colors.alt, colors.stroke));
+    }
+    
+    // Remaining segments inside
+    if !remaining.is_empty() {
+        // Use "stack" shape so inner blocks don't get reporter notch alignment
+        let temp = BlockSpec {
+            shape: "stack".to_string(),
+            category: "custom-arg".to_string(),
+            line_number: None,
+            segments: remaining,
+            body: vec![],
+            else_body: vec![],
+            else_segments: vec![],
+        };
+        svg.push_str(&render_segments(&temp, &temp.segments, theme, colors.text, 0.0, 40.0, 5.0));
+    }
+    
+    svg.push_str("</g>");
+    (svg, width, height)
+}
+
+fn render_simple_block(
+    block: &BlockSpec,
+    theme: &str,
+    path_fn: &dyn Fn(f32, f32) -> String,
+) -> (String, f32, f32) {
+    let colors = colors_for(&block.category, theme);
+    let (width, height) = block_size(block);
+    let mut svg = String::new();
+    // Stack, hat and cap outlines are asymmetric too: the notch sits a fixed
+    // 12–48px from the left and the hat's dome rises over the same corner.
+    // Mirroring the path (and only the path) keeps them on the reading edge.
+    if is_rtl() {
+        svg.push_str(&format!("<g transform=\"translate({} 0) scale(-1 1)\"><path d=\"{}\" fill=\"{}\" stroke=\"{}\"/></g>", width, path_fn(width, height), colors.fill, colors.stroke));
+    } else {
+    svg.push_str(&format!("<path d=\"{}\" fill=\"{}\" stroke=\"{}\"/>", path_fn(width, height), colors.fill, colors.stroke));
+    }
+    svg.push_str(&render_segments(block, &block.segments, theme, colors.text, 0.0, height, 0.0));
+    if block.shape == "cap" {
+        svg.push_str("<circle cx=\"0\" cy=\"0\" r=\"0\"/>");
+    }
+    (svg, width, height)
+}
+
+fn render_reporter_like(block: &BlockSpec, theme: &str, fill: &str, stroke: &str, boolean: bool) -> (String, f32, f32) {
+    let (width, height) = block_size(block);
+    let path = if boolean { boolean_path(width, height) } else { reporter_path(width, height) };
+    let text_fill = colors_for(&block.category, theme).text;
+    // Center content horizontally when block is wider than content (e.g. min-width)
+    let (content_w, _, _, _) = crate::measure::line_metrics(block);
+    let base_x = ((width - content_w) / 2.0).max(0.0);
+    let svg = format!(
+        "<path d=\"{}\" fill=\"{}\" stroke=\"{}\"/>{}",
+        path,
+        fill,
+        stroke,
+        render_segments(block, &block.segments, theme, text_fill, base_x, height, 0.0),
+    );
+    (svg, width, height)
+}
+
+fn render_c_block(block: &BlockSpec, theme: &str, cap: bool) -> (String, f32, f32) {
+    let colors = colors_for(&block.category, theme);
+    let (width, height) = c_block_size(block);
+    let path_width = c_block_inner_width(block);
+    // Two widths, and everything below depends on not mixing them up:
+    //
+    //   path_width  the C outline's own width — the header's measure. A
+    //               nested block wider than the header sticks out past the
+    //               arms, exactly as Scratch itself draws it.
+    //   outer_w     the block's total footprint, header or body whichever
+    //               reaches further. This is what the stack aligns on.
+    //
+    // In LTR both start at x = 0, so the distinction never shows. In RTL the
+    // stack flushes the FOOTPRINT against the right edge, so an outline left
+    // at x = 0 stops `outer_w - path_width` short of it and the block reads
+    // as misaligned. The outline, its header and its mouth therefore all
+    // mirror inside `outer_w`.
+    let outer_w = width.max(path_width);
+    let (_, body_h) = script_size_with_inside(&block.body, true);
+    let has_else = !block.else_body.is_empty() || !block.else_segments.is_empty();
+    let else_h = if has_else { Some(script_size_with_inside(&block.else_body, true).1) } else { None };
+    let mut svg = String::new();
+
+    // Dynamic header height: expand when header contains tall nested blocks
+    let header_nested_h = max_nested_height(block);
+    let header_base = inset(48.0, 36.0);
+    let header_h = if header_nested_h > 32.0 { header_base + (header_nested_h - 32.0) } else { header_base };
+    let body_indent = (header_h / 48.0).clamp(0.6, 1.2) * 16.0;
+
+    // The C outline is asymmetric — the mouth is cut into its left side, and
+    // the top/bottom notches sit 48px from the left. Mirroring just this one
+    // path (never any text) moves the whole shape to the reading edge. A
+    // `scale(-1 1)` on the enclosing group would flip the glyphs too, which
+    // is why only the <path> is wrapped.
+    //
+    // The outline keeps its own measured `path_width`: widening it to the
+    // total width would fatten every C-block in LTR too. It is the mirror
+    // ORIGIN that must be the total width — reflecting about `path_width`
+    // would leave the shape hanging where it already was.
+    let flip_open = if is_rtl() {
+        format!("<g transform=\"translate({} 0) scale(-1 1)\">", outer_w)
+    } else {
+        String::new()
+    };
+    let flip_close = if is_rtl() { "</g>" } else { "" };
+    if cap {
+        svg.push_str(&format!("{}<path d=\"{}\" fill=\"{}\" stroke=\"{}\" />{}", flip_open, mouth_cap_path(path_width, body_h.max(1.0), header_h), colors.fill, colors.stroke, flip_close));
+    } else {
+        svg.push_str(&format!("{}<path d=\"{}\" fill=\"{}\" stroke=\"{}\" />{}", flip_open, mouth_path(path_width, body_h.max(1.0), else_h, header_h), colors.fill, colors.stroke, flip_close));
+    }
+
+    // The header rides on the outline, and the outline now ends at `outer_w`,
+    // so the labels mirror in `outer_w` as well. Mirroring them in
+    // `path_width` would strand them `outer_w - path_width` to the left of
+    // the arms they are supposed to sit on.
+    //
+    // (This call also used to appear twice in a row — the same header was
+    // painted on top of itself.)
+    svg.push_str(&render_segments_in(block, &block.segments, theme, colors.text, 0.0, header_h, 0.0, Some(outer_w)));
+
+    let body_y = header_h - 1.0;
+    let (body_svg, body_w, _) = render_script(&ScriptSpec { blocks: block.body.clone() }, theme, true);
+    // The mouth is indented from the READING edge, so in RTL the nested
+    // script hangs off the right inner wall instead of the left one — and
+    // that wall is at `outer_w`, like everything else in this block.
+    let body_x = if is_rtl() {
+        mirror_span(outer_w, body_indent, body_w)
+    } else {
+        body_indent
+    };
+    svg.push_str(&format!("<g transform=\"translate({} {body_y})\" >{body_svg}</g>", body_x));
+
+    let tail_h = inset(40.0, 30.0) - inset(11.0, 8.0);
+    let adjusted_body = (body_h + s(3.0)).max(tail_h) - s(2.0);
+    let arm_y = header_h + adjusted_body - 3.0;
+
+    if has_else {
+        // Place else label centered in the 29px tail area (arm_y+3 to arm_y+32).
+        // child_offset for text with line_height=32 gives child_y = line_y + 9.
+        // SVG text y=13 is baseline, visual center ≈ baseline - 5.
+        // So visual center = line_y + 9 + 13 - 5 = line_y + 17.
+        // Center else text in the 29px tail area (arm_y+3 to arm_y+32)
+        // Visual center of 12pt text ≈ child_y + 7.5, child_y = line_y + 9
+        // So visual center = line_y + 16.5. Target = arm_y + 17.5.
+        // => line_y = arm_y + 1.0
+        let else_text_line_y = arm_y + inset(1.0, 0.5);
+        svg.push_str(&render_segments_in(block, &block.else_segments, theme, colors.text, 0.0, 32.0, else_text_line_y, Some(outer_w)));
+
+        // Place else body blocks at the top of the else section interior.
+        // Analogy to the first body: body_y = header_h - 1 (i.e. notch_y - 1).
+        // The dividing notch for the else interior is at tail_y = arm_y + 32,
+        // so else body starts at tail_y - 1 = arm_y + 31.
+        let y = arm_y + tail_h + s(2.0);
+        let (else_svg, else_w, _) = render_script(&ScriptSpec { blocks: block.else_body.clone() }, theme, true);
+        let else_x = if is_rtl() {
+            mirror_span(outer_w, body_indent, else_w)
+        } else {
+            body_indent
+        };
+        svg.push_str(&format!("<g transform=\"translate({} {})\" >{else_svg}</g>", else_x, y));
+    } else if block.category == "control" && !has_else {
+        let loop_scale = icon_scale("loopArrow");
+        let loop_w = icon_width("loopArrow");
+        let loop_h = icon_height("loopArrow");
+        let tail_top = arm_y + s(3.0);
+        let loop_y = tail_top + ((tail_h - loop_h) / 2.0).max(0.0);
+        // The loop arrow marks where the script continues, so it belongs on
+        // the trailing edge — the left one in RTL. The tail's far corner is
+        // at `outer_w` there, because the whole outline was mirrored about
+        // that width.
+        let loop_x = if is_rtl() {
+            outer_w - path_width + inset(8.0, 6.0)
+        } else {
+            path_width - loop_w - inset(8.0, 6.0)
+        };
+        // The arrow does not merely sit somewhere — it POINTS, back to the
+        // top of the loop. The glyph curls anticlockwise for a script read
+        // left to right; leaving it alone in RTL aims it away from the block
+        // it loops back to. Unlike @turnRight, whose direction is what the
+        // sprite is told to do, this one is pure layout, so it flips with
+        // the layout. Reflect about the icon's own right edge to keep it in
+        // the box just placed.
+        let loop_transform = if is_rtl() {
+            format!("translate({} {}) scale({} {})", loop_x + loop_w, loop_y, -loop_scale, loop_scale)
+        } else {
+            format!("translate({} {}) scale({})", loop_x, loop_y, loop_scale)
+        };
+        svg.push_str(&format!("<use href=\"#sb-loopArrow\" transform=\"{}\" />", loop_transform));
+    }
+    (svg, width, height)
+}
+
+/// Mirror a laid-out span inside a container.
+///
+/// This is the one piece of arithmetic the whole right-to-left mode rests
+/// on. `container - x` maps a *point*, but every glyph, box and nested block
+/// here is a *span* that still grows rightwards after it is placed — so
+/// mirroring the point alone drops each item one width too far right and
+/// they overlap their neighbour. `container - x - width` mirrors the whole
+/// interval and returns its new left edge, which is what SVG's `translate`
+/// and `x=` actually want.
+#[inline]
+fn mirror_span(container: f32, x: f32, width: f32) -> f32 {
+    container - x - width
+}
+
+fn render_segments(block: &BlockSpec, segments: &[SegmentSpec], theme: &str, text_fill: &str, base_x: f32, line_height: f32, line_y: f32) -> String {
+    render_segments_in(block, segments, theme, text_fill, base_x, line_height, line_y, None)
+}
+
+/// `container_w` is the width the segments are laid out in. It is only
+/// needed for right-to-left, where each span is mirrored inside it; pass
+/// `None` to let the block's own measured width be used.
+fn render_segments_in(block: &BlockSpec, segments: &[SegmentSpec], theme: &str, text_fill: &str, base_x: f32, line_height: f32, line_y: f32, container_w: Option<f32>) -> String {
+    let mut x = 0.0;
+    let mut svg = String::new();
+    let mut previous: Option<&SegmentSpec> = None;
+    let pad_left = segments.first().map(|segment| horizontal_padding(block, segment)).unwrap_or(0.0);
+    let rtl = is_rtl();
+    // The span the segments live in. In RTL every placement is mirrored
+    // inside this width, so it has to match the shape actually drawn.
+    let container = container_w.unwrap_or_else(|| match block.shape.as_str() {
+        "c-block" | "c-block cap" => c_block_inner_width(block),
+        _ => block_size(block).0,
+    });
+    // Mirror a span of width `w` whose left edge is at `base_x + pad_left + x`.
+    let place = |x: f32, w: f32| -> f32 {
+        let left = base_x + pad_left + x;
+        if rtl { mirror_span(container, left, w) } else { left }
+    };
+    let is_notch_block = matches!(block.shape.as_str(), "stack" | "c-block" | "hat" | "cap");
+    let mut first_non_label_aligned = false;
+    for (index, segment) in segments.iter().enumerate() {
+        if let Some(prev) = previous {
+            x += margin_between(prev, segment);
+        }
+
+        // Scratchblocks notch alignment: align the first non-label, non-icon
+        // input so its left edge clears the notch area (right of notch is ~48px).
+        if is_notch_block && !first_non_label_aligned && !matches!(segment, SegmentSpec::Text { .. }) && !matches!(segment, SegmentSpec::Icon { .. }) {
+            let cmw = 48.0 - pad_left;
+            if x < cmw {
+                x = cmw;
+            }
+            first_non_label_aligned = true;
+        }
+
+        match segment {
+            SegmentSpec::Text { value } => {
+                let child_y = child_offset(block, segment, line_height, index == 0, line_y, index, segments.len());
+                svg.push_str(&format!("<text class=\"sb-label\" x=\"{}\" y=\"13\" {} transform=\"translate({} {})\">{}</text>", 0, label_fill(theme, text_fill), place(x, text_width(value)), child_y, escape_text(value)));
+                x += text_width(value);
+            }
+            SegmentSpec::Icon { name } => {
+                let child_y = child_offset(block, segment, line_height, index == 0, line_y, index, segments.len());
+                let scale = icon_scale(name);
+                if name == "flag" || name == "greenFlag" || name == "green-flag" {
+                    svg.push_str(&format!("<use href=\"#sb-greenFlag\" transform=\"translate({} {}) scale({})\"/>", place(x, icon_width(name)), child_y, scale));
+                } else if name == "turnRight" || name == "turn-right" || name == "arrow-right" {
+                    svg.push_str(&format!("<use href=\"#sb-turnRight\" transform=\"translate({} {}) scale({})\"/>", place(x, icon_width(name)), child_y, scale));
+                } else if name == "turnLeft" || name == "turn-left" || name == "arrow-left" {
+                    svg.push_str(&format!("<use href=\"#sb-turnLeft\" transform=\"translate({} {}) scale({})\"/>", place(x, icon_width(name)), child_y, scale));
+                } else if name == "loopArrow" || name == "loop-arrow" {
+                    svg.push_str(&format!("<use href=\"#sb-loopArrow\" transform=\"translate({} {}) scale({})\"/>", place(x, icon_width(name)), child_y, scale));
+                } else {
+                    let icon_text = if name == "arrow-right" { "↻" } else if name == "arrow-left" { "↺" } else if name == "pen" { "✎" } else { "•" };
+                    svg.push_str(&format!("<text class=\"sb-label\" x=\"0\" y=\"13\" {} transform=\"translate({} {})\">{}</text>", label_fill(theme, text_fill), place(x, icon_width(name)), child_y, icon_text));
+                }
+                x += icon_width(name);
+            }
+            SegmentSpec::Input { input, value, color, nested } => {
+                let child_y = child_offset(block, segment, line_height, index == 0, line_y, index, segments.len());
+                if let Some(block) = nested {
+                    let (nested_svg, w, _) = render_block(block, theme);
+                    svg.push_str(&format!("<g transform=\"translate({} {})\">{}</g>", place(x, w), child_y, nested_svg));
+                    x += w;
+                } else {
+                    let w = segment_width(segment);
+                    let input_h = input_box_height(input);
+                    let cat_colors = colors_for(&block.category, theme);
+                    let is_dropdown = input == "dropdown" || input == "dropdown-field";
+                    let is_round = input == "number" || input == "color" || input == "string" || input == "dropdown";
+                    let is_square_dropdown = input == "dropdown-field";
+                    let rx = if is_round {
+                        (input_h / 2.0).max(8.0)
+                    } else if is_square_dropdown {
+                        inset(4.0, 3.0)
+                    } else {
+                        0.0
+                    };
+                    // custom-arg inputs use block fill instead of white (define-hat params)
+                    let custom_fill = block.category == "custom-arg";
+                    let gray_swatch;
+                    let fill = if input == "color" {
+                        // A colour swatch is the one input that carries a real
+                        // colour. Left alone it stays bright red on an
+                        // otherwise grey page, so greyscale converts it to its
+                        // own luminance — the swatch still shows light vs dark
+                        // pen colours, just without the hue.
+                        if theme == "grayscale" {
+                            gray_swatch = desaturate(color.as_str());
+                            gray_swatch.as_str()
+                        } else {
+                            color.as_str()
+                        }
+                    } else if is_dropdown {
+                        if is_square_dropdown { cat_colors.fill } else { if custom_fill { cat_colors.fill } else { cat_colors.alt } }
+                    } else if custom_fill {
+                        cat_colors.fill
+                    } else {
+                        "#ffffff"
+                    };
+                    let stroke = if input == "boolean" {
+                        if theme == "print" || theme == "high-contrast" { cat_colors.stroke } else { "rgba(0,0,0,0.2)" }
+                    } else if is_square_dropdown {
+                        cat_colors.stroke
+                    } else if is_dropdown {
+                        cat_colors.stroke
+                    } else if custom_fill {
+                        cat_colors.stroke
+                    } else {
+                        if theme == "print" || theme == "high-contrast" { cat_colors.stroke } else { "rgba(0,0,0,0.15)" }
+                    };
+                    let opacity_fill = if theme == "print" || theme == "high-contrast" { "#ffffff" } else { "rgba(0,0,0,0.15)" };
+                    let opacity_stroke = if theme == "print" || theme == "high-contrast" { "#000000" } else { "rgba(0,0,0,0.2)" };
+                    if input == "boolean" {
+                        svg.push_str(&format!("<path d=\"{}\" fill=\"{}\" stroke=\"{}\" transform=\"translate({} {})\"/>", boolean_path(w, input_h), opacity_fill, opacity_stroke, place(x, w), child_y));
+                    } else if is_dropdown {
+                        // Dropdown: rounded rect + text left-aligned + real dropdown arrow
+                        let text_fill = if theme == "print" || theme == "high-contrast" { "#000000" } else { cat_colors.text };
+                        let dropdown_fill = if theme == "print" && is_round {
+                            "#ffffff"
+                        } else if theme == "print" {
+                            "#ffffff"
+                        } else {
+                            fill
+                        };
+                        svg.push_str(&format!("<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" ry=\"{}\" fill=\"{}\" stroke=\"{}\"/>",
+                            place(x, w), child_y, w, input_h, rx, rx, dropdown_fill, stroke));
+                        // Scale input insets, but keep minima to avoid text-arrow overlap.
+                        let text_pad = inset(11.0, 7.0);
+                        let box_x = place(x, w);
+                        // Inside the dropdown the label hugs the leading edge
+                        // and the arrow the trailing one, so both swap under
+                        // RTL. The label is anchored at its start, so in RTL
+                        // it is right-anchored instead (see text-anchor below).
+                        let text_x = if rtl {
+                            box_x + w - text_pad
+                        } else {
+                            box_x + text_pad
+                        };
+                        // Keep default baseline at h=32, but scale around center for other heights.
+                        let text_y = child_y + (input_h / 2.0) + 5.0;
+                        let anchor = if rtl { " text-anchor=\"end\"" } else { "" };
+                        svg.push_str(&format!("<text class=\"sb-input-text\" style=\"fill:{}\" x=\"{}\" y=\"{}\"{}>{}</text>",
+                            text_fill, text_x, text_y, anchor, escape_text(value)));
+                        let arrow_w = 12.0;
+                        let arrow_right = inset(12.0, 8.0);
+                        let arrow_x = if rtl {
+                            box_x + arrow_right
+                        } else {
+                            box_x + w - arrow_right - arrow_w
+                        };
+                        let arrow_y = child_y + ((input_h - 9.0) / 2.0);
+                        // In print theme, always use black arrow
+                        let arrow_id = if theme == "print" {
+                            "#sb-dropdownArrow-print"
+                        } else if theme == "grayscale" {
+                            // Follow the label: white text means a dark fill,
+                            // which needs the light arrow, and vice versa.
+                            if text_fill == "#ffffff" { "#sb-dropdownArrow" } else { "#sb-dropdownArrow-dark" }
+                        } else if text_fill == "#ffffff" {
+                            "#sb-dropdownArrow"
+                        } else {
+                            "#sb-dropdownArrow-dark"
+                        };
+                        svg.push_str(&format!("<use href=\"{}\" transform=\"translate({} {})\"/>", arrow_id, arrow_x, arrow_y));
+                    } else if input == "color" {
+                        // Color swatch (always use theme-normal stroke for color swatches)
+                        let swatch_stroke = if theme == "print" { "#000000" } else { stroke };
+                        svg.push_str(&format!("<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" ry=\"{}\" fill=\"{}\" stroke=\"{}\"/>",
+                            place(x, w), child_y, w, input_h, rx, rx, fill, swatch_stroke));
+                    } else {
+                        // Number/string input: use black stroke in print theme
+                        let num_stroke = if theme == "print" { "#000000" } else { stroke };
+                        svg.push_str(&format!("<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" ry=\"{}\" fill=\"{}\" stroke=\"{}\"/>", place(x, w), child_y, w, input_h, rx, rx, fill, num_stroke));
+                        if !value.is_empty() {
+                            let text_cx = place(x, w) + (w / 2.0);
+                            // Keep default baseline at h=32, but scale around center for other heights.
+                            let text_y = child_y + (input_h / 2.0) + 6.0;
+                            if custom_fill {
+                                // Custom parameters share their category's ink;
+                                // white is only correct for the normal theme.
+                                svg.push_str(&format!("<text class=\"sb-input-text\" style=\"fill:{}\" text-anchor=\"middle\" x=\"{}\" y=\"{}\">{}</text>", cat_colors.text, text_cx, text_y, escape_text(value)));
+                            } else {
+                                svg.push_str(&format!("<text class=\"sb-input-text\" text-anchor=\"middle\" x=\"{}\" y=\"{}\">{}</text>", text_cx, text_y, escape_text(value)));
+                            }
+                        }
+                    }
+                    x += w;
+                }
+            }
+            SegmentSpec::Block { block } => {
+                let child_y = child_offset(block, segment, line_height, index == 0, line_y, index, segments.len());
+                let (nested_svg, w, _) = render_block(block, theme);
+                svg.push_str(&format!("<g transform=\"translate({} {})\">{}</g>", place(x, w), child_y, nested_svg));
+                x += w;
+            }
+        }
+        previous = Some(segment);
+    }
+    svg
+}
+
+fn child_offset(parent: &BlockSpec, segment: &SegmentSpec, line_height: f32, first_line: bool, line_y: f32, index: usize, _len: usize) -> f32 {
+    let is_hat = parent.shape == "hat";
+    let (pt, pb) = if is_hat { (s(4.0), s(4.0)) } else { (s(4.0), s(4.0)) };
+    let child_height = match segment {
+        SegmentSpec::Text { .. } => 12.0,
+        SegmentSpec::Icon { name } => icon_height(name),
+        SegmentSpec::Input { input, nested, .. } => nested
+            .as_ref()
+            .map(|block| block_size(block).1)
+            .unwrap_or_else(|| input_box_height(input)),
+        SegmentSpec::Block { block } => block_size(block).1,
+    };
+    // Hat blocks have a curved top cap (fixed 16px in the SVG path).
+    // Center labels in the lower rectangular section, not across full hat height.
+    let hat_body_top = if is_hat { 16.0 } else { 0.0 };
+    let usable_h = if is_hat {
+        (line_height - hat_body_top).max(child_height + pt + pb)
+    } else {
+        line_height
+    };
+    let hat_optical_up = if is_hat { inset(2.0, 1.0) } else { 0.0 };
+    let mut y = hat_body_top + pt + (usable_h - child_height - pt - pb) / 2.0 - hat_optical_up;
+    if matches!(segment, SegmentSpec::Text { .. }) {
+        y -= 1.0;
+    } else if let SegmentSpec::Icon { name } = segment {
+        y += icon_dy(name);
+        if matches!(parent.shape.as_str(), "stack" | "c-block" | "hat" | "cap") && first_line && index == 0 {
+            y += 4.0;
+        }
+    }
+    (line_y + y).floor()
+}
+
+fn collect_script_line_markers(blocks: &[BlockSpec], mut y: f32, out: &mut Vec<LineMarker>) {
+    for block in blocks {
+        collect_block_line_markers(block, y, out);
+        let (_, h) = block_size(block);
+        y += h;
+    }
+}
+
+fn collect_block_line_markers(block: &BlockSpec, y: f32, out: &mut Vec<LineMarker>) {
+    let (_, h) = block_size(block);
+    if let Some(line) = block.line_number {
+        let baseline = block_text_baseline(block, h);
+        out.push(LineMarker {
+            line,
+            y: y + baseline,
+        });
+    }
+
+    if !matches!(block.shape.as_str(), "c-block" | "c-block cap") {
+        return;
+    }
+
+    let (_, body_h) = script_size_with_inside(&block.body, true);
+    let has_else = !block.else_body.is_empty() || !block.else_segments.is_empty();
+    let header_nested_h = max_nested_height(block);
+    let header_h = if header_nested_h > 32.0 {
+        48.0 + (header_nested_h - 32.0)
+    } else {
+        48.0
+    };
+    let body_origin = y + header_h - 1.0;
+    collect_script_line_markers(&block.body, body_origin, out);
+
+    if has_else {
+        let adjusted_body = (body_h + 3.0).max(29.0) - 2.0;
+        let arm_y = header_h + adjusted_body - 3.0;
+        let else_origin = y + arm_y + 31.0;
+        collect_script_line_markers(&block.else_body, else_origin, out);
+    }
+}
+
+fn block_text_baseline(block: &BlockSpec, block_height: f32) -> f32 {
+    // Match the same vertical placement logic as render_segments for text labels.
+    // This makes line numbers sit on the same baseline as the first line text.
+    if block.shape == "define-hat" {
+        return 51.0;
+    }
+
+    let line_height = if matches!(block.shape.as_str(), "c-block" | "c-block cap") {
+        let header_nested_h = max_nested_height(block);
+        if header_nested_h > 32.0 {
+            48.0 + (header_nested_h - 32.0)
+        } else {
+            48.0
+        }
+    } else {
+        block_height
+    };
+
+    let is_hat = block.shape == "hat";
+    let (pt, pb) = (s(4.0), s(4.0));
+    let child_height = 12.0;
+    let hat_body_top = if is_hat { 16.0 } else { 0.0 };
+    let usable_h = if is_hat {
+        (line_height - hat_body_top).max(child_height + pt + pb)
+    } else {
+        line_height
+    };
+    let hat_optical_up = if is_hat { inset(2.0, 1.0) } else { 0.0 };
+    let y = (hat_body_top + pt + (usable_h - child_height - pt - pb) / 2.0 - hat_optical_up - 1.0).floor();
+    y + 13.0
+}
+
+fn horizontal_padding(block: &BlockSpec, segment: &SegmentSpec) -> f32 {
+    if block.shape == "reporter" {
+        if matches!(segment, SegmentSpec::Icon { .. }) {
+            inset(16.0, 12.0)
+        } else if is_round(segment) {
+            inset(4.0, 3.0)
+        } else if matches!(segment, SegmentSpec::Text { .. }) || is_dropdown(segment) || is_boolean(segment) {
+            inset(12.0, 8.0)
+        } else if is_round(segment) {
+            inset(4.0, 3.0)
+        } else {
+            inset(8.0, 6.0)
+        }
+    } else if block.shape == "boolean" {
+        if matches!(segment, SegmentSpec::Icon { .. }) {
+            inset(24.0, 16.0)
+        } else if matches!(segment, SegmentSpec::Text { .. }) || is_dropdown(segment) || is_round(segment) {
+            inset(20.0, 12.0)
+        } else if matches!(segment, SegmentSpec::Block { block } if block.shape == "reporter") {
+            inset(24.0, 16.0)
+        } else if is_round(segment) {
+            inset(20.0, 12.0)
+        } else if is_boolean(segment) {
+            inset(8.0, 6.0)
+        } else {
+            inset(8.0, 6.0)
+        }
+    } else {
+        inset(8.0, 6.0)
+    }
+}
+
+fn margin_between(a: &SegmentSpec, b: &SegmentSpec) -> f32 {
+    if matches!(a, SegmentSpec::Text { .. }) && matches!(b, SegmentSpec::Text { .. }) {
+        LABEL_MARGIN
+    } else {
+        inset(8.0, 6.0)
+    }
+}
+
+fn is_dropdown(segment: &SegmentSpec) -> bool {
+    matches!(segment, SegmentSpec::Input { input, .. } if input == "dropdown" || input == "dropdown-field")
+}
+
+fn is_boolean(segment: &SegmentSpec) -> bool {
+    matches!(segment, SegmentSpec::Input { input, .. } if input == "boolean")
+}
+
+fn is_round(segment: &SegmentSpec) -> bool {
+    matches!(segment, SegmentSpec::Input { input, .. } if input == "number" || input == "string" || input == "color" || input == "dropdown")
+        || matches!(segment, SegmentSpec::Block { block } if block.shape == "reporter")
+}
+
+fn icon_width(name: &str) -> f32 {
+    icon_base_width(name) * icon_scale(name)
+}
+
+fn icon_base_width(name: &str) -> f32 {
+    match name {
+        "greenFlag" | "green-flag" | "flag" => 20.0,
+        "turnLeft" | "turn-left" | "arrow-left" => 24.0,
+        "turnRight" | "turn-right" | "arrow-right" => 24.0,
+        "loopArrow" | "loop-arrow" => 24.0,
+        _ => 20.0,
+    }
+}
+
+fn icon_height(name: &str) -> f32 {
+    icon_base_height(name) * icon_scale(name)
+}
+
+fn icon_base_height(name: &str) -> f32 {
+    match name {
+        "greenFlag" | "green-flag" | "flag" => 21.0,
+        "turnLeft" | "turn-left" | "arrow-left" => 24.0,
+        "turnRight" | "turn-right" | "arrow-right" => 24.0,
+        "loopArrow" | "loop-arrow" => 24.0,
+        _ => 20.0,
+    }
+}
+
+fn icon_scale(name: &str) -> f32 {
+    let base_h = icon_base_height(name);
+    let min_h = match name {
+        "greenFlag" | "green-flag" | "flag" => 16.0,
+        "turnLeft" | "turn-left" | "arrow-left" => 18.0,
+        "turnRight" | "turn-right" | "arrow-right" => 18.0,
+        "loopArrow" | "loop-arrow" => 18.0,
+        _ => 15.0,
+    };
+    (inset(base_h, min_h) / base_h).clamp(0.5, 1.0)
+}
+
+fn icon_dy(name: &str) -> f32 {
+    match name {
+        "greenFlag" | "green-flag" | "flag" => -2.0 * icon_scale(name),
+        _ => 0.0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{BlockSpec, DocumentSpec, ScriptSpec, SegmentSpec};
+
+    #[test]
+    fn test_render_c_block_with_else() {
+        // Build a simple if-else block spec
+        let block = BlockSpec {
+            shape: "c-block".to_string(),
+            category: "control".to_string(),
+            line_number: None,
+            segments: vec![
+                SegmentSpec::Text { value: "falls".to_string() },
+                SegmentSpec::Input { input: "boolean".to_string(), value: "".to_string(), color: "".to_string(), nested: None },
+                SegmentSpec::Text { value: "dann".to_string() },
+            ],
+            body: vec![
+                BlockSpec {
+                    shape: "stack".to_string(),
+                    category: "looks".to_string(),
+                    line_number: None,
+                    segments: vec![SegmentSpec::Text { value: "sagen".to_string() }, SegmentSpec::Input { input: "string".to_string(), value: "Hallo".to_string(), color: "".to_string(), nested: None }],
+                    body: vec![],
+                    else_body: vec![],
+                    else_segments: vec![],
+                }
+            ],
+            else_body: vec![
+                BlockSpec {
+                    shape: "stack".to_string(),
+                    category: "looks".to_string(),
+                    line_number: None,
+                    segments: vec![SegmentSpec::Text { value: "sagen".to_string() }, SegmentSpec::Input { input: "string".to_string(), value: "Tschüss".to_string(), color: "".to_string(), nested: None }],
+                    body: vec![],
+                    else_body: vec![],
+                    else_segments: vec![],
+                }
+            ],
+            else_segments: vec![SegmentSpec::Text { value: "sonst".to_string() }],
+        };
+        let (svg, width, height) = render_c_block(&block, "normal", false);
+        // Check that the else segment appears in SVG
+        assert!(svg.contains("sonst"), "SVG should contain 'sonst' text");
+        // Check that the else body appears (maybe via transform)
+        assert!(svg.contains("Tschüss"), "SVG should contain else body text");
+        // Debug output
+        println!("SVG width={} height={}", width, height);
+        println!("{}", svg);
+    }
+
+    #[test]
+    fn test_render_document_with_line_numbers() {
+        let doc = DocumentSpec {
+            rtl: false,
+            scale: Some(1.0),
+            theme: Some("normal".to_string()),
+            line_numbers: true,
+            line_number_start: 1,
+            line_number_first_block: 1,
+            line_number_gutter: 24.0,
+            inset_scale: 1.0,
+            font: "Helvetica Neue".to_string(),
+            scripts: vec![ScriptSpec {
+                blocks: vec![BlockSpec {
+                    shape: "stack".to_string(),
+                    category: "motion".to_string(),
+                    line_number: Some(1),
+                    segments: vec![
+                        SegmentSpec::Text { value: "move".to_string() },
+                        SegmentSpec::Input {
+                            input: "number".to_string(),
+                            value: "10".to_string(),
+                            color: "".to_string(),
+                            nested: None,
+                        },
+                        SegmentSpec::Text { value: "steps".to_string() },
+                    ],
+                    body: vec![],
+                    else_body: vec![],
+                    else_segments: vec![],
+                }],
+            }],
+        };
+
+        let svg = render_document(&doc);
+        assert!(svg.contains("sb-line-number"));
+        assert!(svg.contains(">1</text>"));
+    }
+
+    #[test]
+    fn test_render_document_line_numbers_start_from_second_block() {
+        let doc = DocumentSpec {
+            rtl: false,
+            scale: Some(1.0),
+            theme: Some("normal".to_string()),
+            line_numbers: true,
+            line_number_start: 1,
+            line_number_first_block: 2,
+            line_number_gutter: 24.0,
+            inset_scale: 1.0,
+            font: "Helvetica Neue".to_string(),
+            scripts: vec![ScriptSpec {
+                blocks: vec![
+                    BlockSpec {
+                        shape: "hat".to_string(),
+                        category: "events".to_string(),
+                        line_number: Some(1),
+                        segments: vec![SegmentSpec::Text { value: "when".to_string() }],
+                        body: vec![],
+                        else_body: vec![],
+                        else_segments: vec![],
+                    },
+                    BlockSpec {
+                        shape: "stack".to_string(),
+                        category: "motion".to_string(),
+                        line_number: Some(2),
+                        segments: vec![
+                            SegmentSpec::Text { value: "move".to_string() },
+                            SegmentSpec::Input {
+                                input: "number".to_string(),
+                                value: "10".to_string(),
+                                color: "".to_string(),
+                                nested: None,
+                            },
+                        ],
+                        body: vec![],
+                        else_body: vec![],
+                        else_segments: vec![],
+                    },
+                ],
+            }],
+        };
+
+        let svg = render_document(&doc);
+        assert!(svg.contains("sb-line-number"));
+        assert!(svg.contains(">1</text>"));
+        assert!(!svg.contains(">2</text>"));
+    }
+}
+
+/// Convert a `#rgb` or `#rrggbb` colour to the grey of the same perceived lightness.
+///
+/// Used for the colour swatch in `set pen color to [ ]`, which is the only
+/// input carrying a colour of its own: without this it stays vividly red on
+/// an otherwise grey page. Uses the sRGB luminance coefficients and a real
+/// gamma round-trip, so a mid red and a mid blue do not collapse to the same
+/// grey the way a naive (r+g+b)/3 would make them.
+fn desaturate(hex: &str) -> String {
+    let h = hex.trim_start_matches('#');
+    // The parser accepts both CSS hex forms. Leaving #rgb untouched leaks
+    // colour into grayscale documents even though #rrggbb works correctly.
+    // Validate ASCII before slicing, also for callers of the JSON renderer.
+    if !matches!(h.len(), 3 | 6) || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return hex.to_string();
+    }
+    let channel = |i: usize| -> f32 {
+        let value = if h.len() == 3 {
+            u8::from_str_radix(&h[i..i + 1], 16).unwrap() * 17
+        } else {
+            u8::from_str_radix(&h[2 * i..2 * i + 2], 16).unwrap()
+        };
+        value as f32 / 255.0
+    };
+    let (r, g, b) = (channel(0), channel(1), channel(2));
+    let to_linear = |c: f32| if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) };
+    let luminance = 0.2126 * to_linear(r) + 0.7152 * to_linear(g) + 0.0722 * to_linear(b);
+    let encoded = if luminance <= 0.003_130_8 {
+        12.92 * luminance
+    } else {
+        1.055 * luminance.powf(1.0 / 2.4) - 0.055
+    };
+    let v = (encoded * 255.0).round().clamp(0.0, 255.0) as u8;
+    format!("#{v:02x}{v:02x}{v:02x}")
+}

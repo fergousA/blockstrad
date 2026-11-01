@@ -1,0 +1,12 @@
+[package]
+name = "blockstrad"
+version = "0.1.0"
+entrypoint = "lib.typ"
+authors = ["Fergous Abdelhak <@fergousA>"]
+license = "MIT"
+description = "Translate Scratch block labels between blockst locales while preserving semantic block identity."
+compiler = "0.15.0"
+keywords = ["scratch", "translation", "education", "arabic", "blockst"]
+categories = ["visualization", "components", "languages"]
+disciplines = ["education", "computer-science"]
+exclude = ["/engine", "/scripts", "/tests", "/examples", "*.pdf", "*.zip"]

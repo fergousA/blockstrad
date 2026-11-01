@@ -1,0 +1,6 @@
+error: plugin errored with: blockstrad: CONTROL_STOP:1: kept menu value 'custom' (no contextual official match); an explicit dictionary.menus override is possible. Supply dictionary.menus for this slot, or set strict-menus: false and inspect blockstrad-info(...).warnings.
+   ┌─ lib.typ:84:20
+   │
+84 │   let tokens = json(_engine.extract_texts(bytes(json.encode(payload))))
+   │                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
