@@ -248,8 +248,6 @@ Le vérificateur Python utilise seulement la bibliothèque standard de Python
 3.11+. Les sources Rust, Cargo.lock, scripts de construction, fixtures et tests
 sont inclus. Le moteur livré a été construit avec Rust 1.98.1.
 
-Résultats détaillés : [VALIDATION.md](VALIDATION.md).
-
 ## Relation avec blockst et provenance des traductions
 
 Ce prototype embarque une **copie versionnée du moteur blockst**, avec les
